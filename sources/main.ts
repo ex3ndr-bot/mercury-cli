@@ -6,11 +6,15 @@ import { logoutCommand } from "./commands/logout/index.js";
 import { statusCommand } from "./commands/status/index.js";
 import { accountsCommand } from "./commands/accounts/index.js";
 import { transactionsCommand } from "./commands/transactions/index.js";
+import { transferCommand } from "./commands/transfer/index.js";
 import { recipientsCommand } from "./commands/recipients/index.js";
 import { cardsCommand } from "./commands/cards/index.js";
 import { statementsCommand } from "./commands/statements/index.js";
 import { webhooksCommand } from "./commands/webhooks/index.js";
 import { eventsCommand } from "./commands/events/index.js";
+import { organizationCommand } from "./commands/organization/index.js";
+import { usersCommand } from "./commands/users/index.js";
+import { categoriesCommand } from "./commands/categories/index.js";
 import { versionCommand } from "./commands/version/index.js";
 
 const BIN = "mercury";
@@ -21,11 +25,15 @@ const commands: readonly Command[] = [
   statusCommand,
   accountsCommand,
   transactionsCommand,
+  transferCommand,
   recipientsCommand,
   cardsCommand,
   statementsCommand,
   webhooksCommand,
   eventsCommand,
+  organizationCommand,
+  usersCommand,
+  categoriesCommand,
   versionCommand,
 ];
 
