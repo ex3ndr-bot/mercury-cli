@@ -1,5 +1,7 @@
 # mercury-cli
 
+![Mercury CLI Hero](hero.png)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 A powerful CLI for the [Mercury Banking API](https://docs.mercury.com/reference). Manage accounts, transactions, recipients, webhooks, and more from your terminal.
@@ -14,7 +16,7 @@ A powerful CLI for the [Mercury Banking API](https://docs.mercury.com/reference)
 
 ## Installation
 
-### From source (recommended)
+### From source
 
 ```bash
 # Clone the repository
@@ -36,6 +38,8 @@ bun run build
 
 - [Bun](https://bun.sh/) v1.0 or later
 
+---
+
 ## Quick Start
 
 ```bash
@@ -52,46 +56,303 @@ mercury accounts
 mercury transactions <account-id>
 ```
 
-## Commands
+---
 
-### Authentication
+## Global Options
+
+All commands support these global options:
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON instead of human-readable tables |
+| `-h`, `--help` | Show help for the command |
+| `-v`, `--version` | Show CLI version |
+
+---
+
+## Authentication
+
+Mercury CLI uses API tokens for authentication. Tokens are stored locally in `~/.mercury/token` with restricted permissions (mode `600`).
+
+### Getting Your API Token
+
+1. Log in to [Mercury Dashboard](https://app.mercury.com)
+2. Navigate to **Settings → API**
+3. Click **Create API Token**
+4. Choose token permissions:
+   - **Read-only**: Can fetch all data, cannot initiate transactions
+   - **Read-write**: Full access including payments
+   - **Custom**: Fine-grained scope control
+5. Copy the token (format: `secret-token:mercury_production_...`)
+
+### Token Scopes
+
+| Scope | Permissions |
+|-------|-------------|
+| `read` | View accounts, transactions, recipients |
+| `offline_access` | Refresh token access |
+| `SendMoney` | Initiate transfers and payments |
+| `RequestCards` | Create debit cards |
+
+---
+
+### `mercury login`
+
+Store an API token for authentication.
+
+**Syntax:**
+```
+mercury login --token <TOKEN>
+mercury login --token-stdin
+```
+
+**Flags:**
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--token <TOKEN>` | One of these | API token string |
+| `--token-stdin` | One of these | Read token from stdin |
+
+**Examples:**
 
 ```bash
-# Login with token
-mercury login --token secret-token:mercury_production_xxx
+# Direct token input
+mercury login --token "secret-token:mercury_production_wma_xxx"
 
-# Login from stdin (useful for CI)
-echo $MERCURY_TOKEN | mercury login --token-stdin
+# From environment variable
+mercury login --token "$MERCURY_TOKEN"
 
-# Check authentication status
-mercury status
+# From stdin (CI/CD friendly)
+echo "$MERCURY_TOKEN" | mercury login --token-stdin
 
-# Logout (remove stored token)
+# From file
+cat ~/.secrets/mercury | mercury login --token-stdin
+```
+
+**Success Response:**
+```
+Authenticated successfully. Token saved to ~/.mercury/token
+```
+
+**Error Cases:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Missing token` | Neither `--token` nor `--token-stdin` provided | Provide token via one of the methods |
+| `Token cannot be empty` | Empty string provided | Ensure token is not empty |
+| `Use either --token or --token-stdin, not both` | Both flags used | Use only one method |
+
+---
+
+### `mercury logout`
+
+Remove stored authentication token.
+
+**Syntax:**
+```
 mercury logout
 ```
 
-### Accounts
+**Examples:**
 
 ```bash
-# List all accounts
-mercury accounts
-# Output:
-# ID                                    Name                  Type          Status      Available        Current
-# ──────────────────────────────────    ────────────────────  ────────────  ──────────  ───────────────  ───────────────
-# abc123-def456-...                     Operating Account     checking      active      $125,432.10      $125,432.10
-# xyz789-uvw012-...                     Savings               savings       active      $50,000.00       $50,000.00
+mercury logout
+# Output: Logged out. Token removed from ~/.mercury/token
 
-# Get account details
-mercury accounts get abc123-def456-...
-
-# JSON output
-mercury accounts --json
+# If not logged in:
+mercury logout
+# Output: Not currently authenticated.
 ```
 
-### Transactions
+---
+
+### `mercury status`
+
+Show current authentication and configuration status.
+
+**Syntax:**
+```
+mercury status
+```
+
+**Example Output:**
+```
+Mercury CLI Status
+──────────────────
+Authenticated: Yes
+Token: secret-tok...xxxx
+API Base URL: https://api.mercury.com/api/v1
+Default Account: abc123-def456-...
+```
+
+**Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `Authenticated` | Yes/No |
+| `Token` | Masked token (first 10 + last 4 chars) |
+| `API Base URL` | API endpoint being used |
+| `Default Account` | If configured in config.json |
+
+---
+
+## Token Storage & Configuration
+
+### File Locations
+
+| File | Purpose | Permissions |
+|------|---------|-------------|
+| `~/.mercury/token` | API token | `600` (owner read/write only) |
+| `~/.mercury/config.json` | Optional configuration | `600` |
+
+### Configuration File
+
+Optional configuration at `~/.mercury/config.json`:
+
+```json
+{
+  "defaultAccountId": "abc123-def456-...",
+  "apiBaseUrl": "https://api.mercury.com/api/v1"
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `defaultAccountId` | string | none | Account ID to use when not specified |
+| `apiBaseUrl` | string | `https://api.mercury.com/api/v1` | API endpoint |
+
+### Security Best Practices
+
+1. **Never commit tokens** — Add `.mercury/` to `.gitignore`
+2. **Use environment variables in CI** — Don't hardcode tokens
+3. **Rotate tokens periodically** — Regenerate from Mercury Dashboard
+4. **Use read-only tokens when possible** — Minimize risk
+
+---
+
+## Accounts
+
+Manage Mercury bank accounts.
+
+**Aliases:** `account`, `acc`
+
+### `mercury accounts` / `mercury accounts list`
+
+List all accounts.
+
+**Syntax:**
+```
+mercury accounts [list] [--json]
+```
+
+**Example Output:**
+```
+ID                                    Name                  Type          Status      Available        Current
+──────────────────────────────────    ────────────────────  ────────────  ──────────  ───────────────  ───────────────
+abc123-def456-...                     Operating Account     checking      active      $125,432.10      $125,432.10
+xyz789-uvw012-...                     Savings               savings       active      $50,000.00       $50,000.00
+```
+
+**JSON Response:**
+```json
+[
+  {
+    "id": "abc123-def456-...",
+    "name": "Operating Account",
+    "status": "active",
+    "type": "checking",
+    "accountNumber": "1234567890",
+    "routingNumber": "021000021",
+    "currentBalance": 12543210,
+    "availableBalance": 12543210,
+    "createdAt": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+### `mercury accounts get`
+
+Get detailed information about a specific account.
+
+**Syntax:**
+```
+mercury accounts get <account-id> [--json]
+```
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `account-id` | Yes | The UUID of the account |
+
+**Example:**
+```bash
+mercury accounts get abc123-def456-789a-bcde-f01234567890
+```
+
+**Output:**
+```
+Account Details
+───────────────
+ID:              abc123-def456-789a-bcde-f01234567890
+Name:            Operating Account
+Type:            checking
+Status:          active
+Account Number:  1234567890
+Routing Number:  021000021
+Available:       $125,432.10
+Current:         $125,432.10
+Created:         Jan 15, 2024
+```
+
+**Account Types:**
+- `checking` — Standard business checking account
+- `savings` — Business savings account
+- `mercury_treasury` — Mercury Treasury account
+
+**Account Statuses:**
+- `active` — Account is open and operational
+- `pending` — Account is being set up
+- `closed` — Account has been closed
+
+---
+
+## Transactions
+
+View and send transactions.
+
+**Aliases:** `tx`, `txn`
+
+### `mercury transactions`
+
+List transactions for an account.
+
+**Syntax:**
+```
+mercury transactions <account-id> [options] [--json]
+```
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `account-id` | Yes | The UUID of the account |
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--limit <N>` | integer | 25 | Maximum number of transactions to return |
+| `--offset <N>` | integer | 0 | Number of transactions to skip (for pagination) |
+| `--status <status>` | string | all | Filter by status: `pending`, `sent`, `cancelled`, `failed` |
+| `--start <date>` | ISO date | none | Filter transactions on or after this date |
+| `--end <date>` | ISO date | none | Filter transactions on or before this date |
+| `--search <query>` | string | none | Search by counterparty name |
+
+**Examples:**
 
 ```bash
-# List transactions for an account
+# List recent transactions
 mercury transactions abc123-def456-...
 
 # With pagination
@@ -105,272 +366,408 @@ mercury transactions abc123-def456-... --start 2024-01-01 --end 2024-12-31
 
 # Search by counterparty
 mercury transactions abc123-def456-... --search "Acme Corp"
+```
 
-# Get transaction details
-mercury transactions get abc123-def456-... txn789-...
+**Transaction Statuses:**
+- `pending` — Transaction is being processed
+- `sent` — Transaction completed successfully
+- `cancelled` — Transaction was cancelled
+- `failed` — Transaction failed
 
-# Send money (ACH)
+**Transaction Kinds:**
+- `externalTransfer` — ACH or wire transfer to external account
+- `internalTransfer` — Transfer between Mercury accounts
+- `outgoingPayment` — Check or other outgoing payment
+- `incomingPayment` — Received payment
+
+---
+
+### `mercury transactions get`
+
+Get detailed information about a specific transaction.
+
+**Syntax:**
+```
+mercury transactions get <account-id> <transaction-id> [--json]
+```
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `account-id` | Yes | The UUID of the account |
+| `transaction-id` | Yes | The UUID of the transaction |
+
+---
+
+### `mercury transactions send`
+
+Send money to a recipient via ACH or wire transfer.
+
+**Syntax:**
+```
+mercury transactions send <account-id> --recipient <id> --amount <cents> --idempotency-key <key> [options] [--json]
+```
+
+**Options:**
+
+| Option | Required | Type | Description |
+|--------|----------|------|-------------|
+| `--recipient <id>` | Yes | string | Recipient UUID |
+| `--amount <cents>` | Yes | integer | Amount in cents (e.g., `10000` = $100.00) |
+| `--idempotency-key <key>` | Yes | string | Unique key to prevent duplicate transactions |
+| `--method <method>` | No | string | Transfer method: `ach` (default) or `wire` |
+| `--note <note>` | No | string | Internal note for the transaction |
+
+**Examples:**
+
+```bash
+# Send $100 via ACH
 mercury transactions send abc123-def456-... \
   --recipient recip-123 \
   --amount 10000 \
-  --idempotency-key "invoice-2024-001" \
-  --note "Payment for services"
+  --idempotency-key "invoice-2024-001"
 
-# Send money (Wire)
+# Send $500 via Wire with note
 mercury transactions send abc123-def456-... \
   --recipient recip-123 \
   --amount 50000 \
   --idempotency-key "wire-2024-001" \
-  --method wire
+  --method wire \
+  --note "Urgent payment"
 ```
 
-### Internal Transfers
+**Important Notes:**
+- Amounts are always in cents (smallest currency unit)
+- Idempotency keys prevent duplicate transactions if the request is retried
+- Wire transfers typically have higher fees but faster delivery
+- ACH transfers take 1-3 business days
 
-```bash
-# Transfer between your Mercury accounts
-mercury transfer \
-  --from abc123-def456-... \
-  --to xyz789-uvw012-... \
-  --amount 25000 \
-  --idempotency-key "transfer-2024-001"
+---
+
+## Internal Transfers
+
+### `mercury transfer`
+
+Transfer funds between two Mercury accounts you own.
+
+**Syntax:**
+```
+mercury transfer --from <account-id> --to <account-id> --amount <cents> --idempotency-key <key> [options] [--json]
 ```
 
-### Recipients
+**Options:**
 
-```bash
-# List all recipients
-mercury recipients
+| Option | Required | Type | Description |
+|--------|----------|------|-------------|
+| `--from <id>` | Yes | string | Source account UUID |
+| `--to <id>` | Yes | string | Destination account UUID |
+| `--amount <cents>` | Yes | integer | Amount in cents |
+| `--idempotency-key <key>` | Yes | string | Unique key to prevent duplicates |
+| `--note <note>` | No | string | Internal note |
 
-# Get recipient details
-mercury recipients get recip-123
+---
 
-# Add a new recipient
-mercury recipients add \
-  --name "Acme Corporation" \
-  --account 123456789 \
-  --routing 021000021 \
-  --bank-name "Chase" \
-  --account-type businessChecking \
-  --email billing@acme.com
+## Recipients
 
-# Delete recipient
-mercury recipients delete recip-123
+Manage payment recipients (external bank accounts).
+
+**Aliases:** `recipient`, `recip`
+
+### `mercury recipients` / `mercury recipients list`
+
+List all recipients.
+
+**Syntax:**
+```
+mercury recipients [list] [--limit <N>] [--offset <N>] [--json]
 ```
 
-### Cards
+### `mercury recipients get`
 
-```bash
-# List cards for an account
-mercury cards abc123-def456-...
+Get detailed information about a recipient.
+
+**Syntax:**
+```
+mercury recipients get <recipient-id> [--json]
 ```
 
-### Statements
+### `mercury recipients add`
 
-```bash
-# List statements
-mercury statements abc123-def456-...
+Add a new payment recipient.
 
-# Get statement details
-mercury statements get abc123-def456-... stmt-123
+**Syntax:**
+```
+mercury recipients add --name <name> --account <number> --routing <number> [options] [--json]
 ```
 
-### Webhooks
+**Options:**
 
-```bash
-# List webhooks
-mercury webhooks
+| Option | Required | Type | Description |
+|--------|----------|------|-------------|
+| `--name <name>` | Yes | string | Recipient name |
+| `--account <number>` | Yes | string | Bank account number |
+| `--routing <number>` | Yes | string | Bank routing number (9 digits) |
+| `--bank-name <name>` | No | string | Name of the bank |
+| `--account-type <type>` | No | string | Account type |
+| `--email <email>` | No | string | Contact email (repeatable) |
 
-# Create webhook
-mercury webhooks create \
-  --url https://api.example.com/mercury-webhook \
-  --events transaction.created,transaction.updated
+**Account Types:** `businessChecking`, `businessSavings`, `personalChecking`, `personalSavings`
 
-# Get webhook details
-mercury webhooks get webhook-123
+### `mercury recipients delete`
 
-# Update webhook
-mercury webhooks update webhook-123 --status paused
+Delete a recipient.
 
-# Verify webhook endpoint
-mercury webhooks verify webhook-123
-
-# Delete webhook
-mercury webhooks delete webhook-123
+**Syntax:**
+```
+mercury recipients delete <recipient-id>
 ```
 
-### Events (Audit Trail)
+---
 
-```bash
-# List recent events
-mercury events
+## Cards
 
-# Filter by resource type
-mercury events --type transaction
+**Aliases:** `card`
 
-# With pagination
-mercury events --limit 100
+### `mercury cards`
 
-# Get event details
-mercury events get event-123
+List cards for an account.
+
+**Syntax:**
+```
+mercury cards <account-id> [--json]
 ```
 
-### Organization
+**Card Statuses:** `active`, `frozen`, `cancelled`
 
-```bash
-# Get organization details
-mercury organization
-# Output:
-# Organization Details
-# ────────────────────
-# ID:          org-123
-# Legal Name:  Acme Corporation Inc.
-# EIN:         12-3456789
-# DBAs:        Acme, Acme Corp
+---
+
+## Statements
+
+**Aliases:** `statement`
+
+### `mercury statements`
+
+List statements for an account.
+
+**Syntax:**
+```
+mercury statements <account-id> [--json]
 ```
 
-### Users
+### `mercury statements get`
 
-```bash
-# List organization users
-mercury users
+Get a specific statement.
 
-# Get user details
-mercury users get user-123
+**Syntax:**
+```
+mercury statements get <account-id> <statement-id> [--json]
 ```
 
-### Categories
+---
 
-```bash
-# List transaction categories
-mercury categories
+## Webhooks
+
+**Aliases:** `webhook`, `wh`
+
+### `mercury webhooks` / `mercury webhooks list`
+
+List all webhook endpoints.
+
+**Syntax:**
+```
+mercury webhooks [list] [--json]
 ```
 
-## Output Formats
+### `mercury webhooks get`
 
-All commands support the `--json` flag for machine-readable output:
+Get details about a webhook.
 
-```bash
-# Human-readable (default)
-mercury accounts
-
-# JSON output
-mercury accounts --json
-
-# Use with jq for scripting
-mercury accounts --json | jq '.[0].availableBalance'
-
-# Export to file
-mercury transactions abc123... --json > transactions.json
+**Syntax:**
+```
+mercury webhooks get <webhook-id> [--json]
 ```
 
-## Configuration
+### `mercury webhooks create`
 
-### Token Storage
+Create a new webhook endpoint.
 
-Your API token is stored securely in `~/.mercury/token` with restricted permissions (600).
-
-### Optional Config File
-
-Create `~/.mercury/config.json` for additional settings:
-
-```json
-{
-  "defaultAccountId": "abc123-def456-...",
-  "apiBaseUrl": "https://api.mercury.com/api/v1"
-}
+**Syntax:**
+```
+mercury webhooks create --url <url> [--events <event1,event2>] [--secret <secret>] [--json]
 ```
 
-## Scripting Examples
+**Event Types:** `transaction.created`, `transaction.updated`, `account.created`, `recipient.created`, `*` (wildcard)
 
-### Daily Balance Report
+### `mercury webhooks update`
 
-```bash
-#!/bin/bash
-mercury accounts --json | jq -r '.[] | "\(.name): \(.availableBalance)"'
+Update an existing webhook.
+
+**Syntax:**
+```
+mercury webhooks update <webhook-id> [--url <url>] [--events <events>] [--status <status>] [--json]
 ```
 
-### Export Recent Transactions
+### `mercury webhooks delete`
 
-```bash
-#!/bin/bash
-ACCOUNT_ID="abc123-def456-..."
-mercury transactions $ACCOUNT_ID --limit 100 --json > ~/backups/transactions-$(date +%Y%m%d).json
+Delete a webhook endpoint.
+
+**Syntax:**
+```
+mercury webhooks delete <webhook-id>
 ```
 
-### Webhook Setup
+### `mercury webhooks verify`
 
-```bash
-#!/bin/bash
-mercury webhooks create \
-  --url "$WEBHOOK_URL" \
-  --events "transaction.created,transaction.updated"
+Send a test event to verify webhook connectivity.
+
+**Syntax:**
+```
+mercury webhooks verify <webhook-id>
 ```
 
-### CI/CD Token Setup
+---
 
-```bash
-# In your CI pipeline
-echo "$MERCURY_API_TOKEN" | mercury login --token-stdin
-mercury accounts --json  # Verify authentication
+## Events
+
+**Aliases:** `event`
+
+### `mercury events` / `mercury events list`
+
+List API events (audit trail).
+
+**Syntax:**
 ```
+mercury events [list] [--limit <N>] [--offset <N>] [--type <type>] [--json]
+```
+
+### `mercury events get`
+
+Get details about a specific event.
+
+**Syntax:**
+```
+mercury events get <event-id> [--json]
+```
+
+---
+
+## Organization
+
+**Aliases:** `org`
+
+### `mercury organization`
+
+Get organization information (legal name, EIN, address).
+
+**Syntax:**
+```
+mercury organization [--json]
+```
+
+---
+
+## Users
+
+**Aliases:** `user`
+
+### `mercury users` / `mercury users list`
+
+List all users in the organization.
+
+**Syntax:**
+```
+mercury users [list] [--json]
+```
+
+### `mercury users get`
+
+Get details about a specific user.
+
+**Syntax:**
+```
+mercury users get <user-id> [--json]
+```
+
+---
+
+## Categories
+
+**Aliases:** `category`, `cat`
+
+### `mercury categories`
+
+List available transaction categories.
+
+**Syntax:**
+```
+mercury categories [--json]
+```
+
+---
 
 ## Error Handling
 
-The CLI returns appropriate exit codes:
+### Common Errors
 
-- `0` — Success
-- `1` — Error (authentication failed, API error, invalid arguments)
+| HTTP Code | Error | Cause | Solution |
+|-----------|-------|-------|----------|
+| 401 | `Not authenticated` | Missing or invalid token | Run `mercury login` |
+| 403 | `Forbidden` | Token lacks required scope | Get token with appropriate permissions |
+| 404 | `Not found` | Resource doesn't exist | Verify the ID |
+| 422 | `Validation error` | Invalid parameters | Check format and values |
+| 429 | `Rate limited` | Too many requests | Wait and retry |
 
-Error messages are written to stderr:
+---
 
-```bash
-mercury accounts 2>/dev/null || echo "Failed to fetch accounts"
-```
+## Scripting Examples
 
-## API Coverage
-
-| Resource | Commands |
-|----------|----------|
-| Accounts | list, get |
-| Transactions | list, get, send |
-| Transfers | create (internal) |
-| Recipients | list, get, add, delete |
-| Cards | list |
-| Statements | list, get |
-| Webhooks | list, get, create, update, delete, verify |
-| Events | list, get |
-| Organization | get |
-| Users | list, get |
-| Categories | list |
-
-## Development
+### Export Transactions to CSV
 
 ```bash
-# Clone
-git clone https://github.com/ex3ndr-bot/mercury-cli.git
-cd mercury-cli
-
-# Install dependencies
-bun install
-
-# Run in development
-bun run dev
-
-# Type check
-bun run typecheck
-
-# Build binary
-bun run build
+mercury transactions "$ACCOUNT_ID" --limit 1000 --json | \
+  jq -r '.transactions[] | [.id, .status, .amount, .counterpartyName] | @csv'
 ```
 
-## Contributing
+### Daily Balance Check
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+balance=$(mercury accounts get "$ACCOUNT_ID" --json | jq -r '.availableBalance')
+echo "Balance: $((balance / 100)) dollars"
+```
+
+---
+
+## API Reference
+
+- **Base URL:** `https://api.mercury.com/api/v1`
+- **Authentication:** Bearer token
+- **Rate Limits:** 100 requests per minute
+- **Documentation:** [docs.mercury.com/reference](https://docs.mercury.com/reference)
+
+### Endpoint Mapping
+
+| CLI Command | HTTP Method | API Endpoint |
+|-------------|-------------|--------------|
+| `accounts list` | GET | `/accounts` |
+| `accounts get <id>` | GET | `/account/{id}` |
+| `transactions list` | GET | `/account/{id}/transactions` |
+| `transactions send` | POST | `/account/{id}/transactions` |
+| `transfer` | POST | `/transfer` |
+| `recipients list` | GET | `/recipients` |
+| `recipients add` | POST | `/recipients` |
+| `recipients delete <id>` | DELETE | `/recipient/{id}` |
+| `cards` | GET | `/account/{id}/cards` |
+| `statements list` | GET | `/account/{id}/statements` |
+| `webhooks list` | GET | `/webhooks` |
+| `webhooks create` | POST | `/webhooks` |
+| `events list` | GET | `/events` |
+| `organization` | GET | `/organization` |
+| `users list` | GET | `/users` |
+| `categories` | GET | `/categories` |
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
-
-## Disclaimer
-
-This is an unofficial CLI client. Mercury is a trademark of Mercury Technologies, Inc.
+MIT License. See [LICENSE](LICENSE) for details.
