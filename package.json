@@ -4,15 +4,20 @@
   "description": "CLI for Mercury Banking API",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ex3ndr-bot/mercury-cli.git"
+    "url": "https://github.com/ex3ndr/mercury-cli.git"
   },
   "license": "MIT",
   "type": "module",
   "bin": {
-    "mercury": "bin/mercury.js"
+    "mercury": "./dist/main.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "bun build ./sources/main.ts --compile --outfile ./dist/mercury",
+    "build": "bun build ./sources/main.ts --outdir ./dist --target node",
     "dev": "bun ./sources/main.ts",
     "typecheck": "tsc --noEmit"
   },
