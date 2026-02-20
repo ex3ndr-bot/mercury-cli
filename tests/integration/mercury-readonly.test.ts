@@ -21,6 +21,7 @@ async function mercuryGet(path: string, token: string) {
 }
 
 describe("mercury integration (read-only)", () => {
+  const token = process.env.MERCURY_TOKEN;
 
   if (!token) {
     it.skip("MERCURY_TOKEN is not set (skipping local integration tests)", () => {});
